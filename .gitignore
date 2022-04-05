@@ -2,3 +2,4 @@ config.py
 data/
 data_archives/
 .DS_Store
+__pycache__/
