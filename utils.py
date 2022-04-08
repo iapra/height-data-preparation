@@ -2,6 +2,11 @@ from osgeo import gdal
 from gdalconst import GA_ReadOnly
 import laspy
 import numpy as np
+import csv
+import os
+from shapely.ops import cascaded_union
+from shapely.geometry import Polygon
+import geopandas as gpd
 
 def bbox(points):
     """ Defines the two oposite corners of the bounding box 
@@ -66,3 +71,54 @@ def get_array(las_fp):
             arr = [x,y,z]
             array.append(arr)
     return array
+
+def datasets_to_geojson(split_folder_path, images_dir):
+    train_txt, val_txt, test_txt = f"{split_folder_path}/train.txt", f"{split_folder_path}/val.txt", f"{split_folder_path}/test.txt"
+    train_json, val_json, test_json = f"{split_folder_path}/train.json", f"{split_folder_path}/val.json", f"{split_folder_path}/test.json" 
+    
+    # We write train_images to geojson
+    if not os.path.exists(train_json):
+        train_polys = []
+        with open(train_txt) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter='\n')
+            # Each row of the txt is an image-id
+            for image_id in csv_reader:
+                image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
+                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
+                train_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
+                train_polys.append(train_poly)
+        train_merge = gpd.GeoSeries(cascaded_union(train_polys))
+        train_merge.to_file(train_json, driver="GeoJSON") 
+
+    # We write val_images to geojson
+    if not os.path.exists(val_json):
+        val_polys = []
+        with open(val_txt) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter='\n')
+            # Each row of the txt is an image-id
+            for image_id in csv_reader:
+                image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
+                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
+                val_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
+                val_polys.append(val_poly)
+        val_merge = gpd.GeoSeries(cascaded_union(val_polys))
+        val_merge.to_file(val_json, driver="GeoJSON")  
+
+    # We write test_images to geojson
+    if not os.path.exists(test_json):
+        test_polys = []
+        with open(test_txt) as csv_file:
+            csv_reader = csv.reader(csv_file, delimiter='\n')
+            # Each row of the txt is an image-id
+            for image_id in csv_reader:
+                image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
+                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
+                test_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
+                test_polys.append(test_poly)
+        test_merge = gpd.GeoSeries(cascaded_union(test_polys))
+        test_merge.to_file(test_json, driver="GeoJSON") 
+
+def get_poly_from_img(img_path):
+    _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(img_path)
+    poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
+    return poly
