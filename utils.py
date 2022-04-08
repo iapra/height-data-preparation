@@ -23,6 +23,16 @@ def bbox(points):
     return bbox
 
 def get_img_bbox(input_path):
+    '''
+    Obtains geographical information about .tif image
+    Input:
+    input_path = .tif image input path
+    Output:
+    RasterXSize = raster size X direction, 
+    RasterYSize = raster size Y direction, 
+    [minx, miny, maxx, maxy] = bouding-box coordinates,
+    [ulx_deg, uly_deg, lrx_deg, lry_deg] = bouding-box coordinates in degrees
+    '''
     ### GET PROJECTED COORDINATES
     data = gdal.Open(input_path, GA_ReadOnly)
     geoTransform = data.GetGeoTransform()
@@ -55,9 +65,6 @@ def get_img_bbox(input_path):
     return data.RasterXSize, data.RasterYSize, [minx, miny, maxx, maxy], \
         [np.float128(ulx_deg), np.float128(uly_deg), np.float128(lrx_deg), np.float128(lry_deg)]
 
-        # [ulx_deg, uly_deg, np.float128(lrx_deg), np.float128(lry_deg)]
-        # [np.float128(ulx_deg), np.float128(uly_deg), np.float128(lrx_deg), np.float128(lry_deg)]
-
 def get_array(las_fp):
     array = []
     with laspy.open(las_fp) as fh:
@@ -73,52 +80,51 @@ def get_array(las_fp):
     return array
 
 def datasets_to_geojson(split_folder_path, images_dir):
+    '''
+    Outputs a geojson polygon per dataset (train, validation, test).
+    Input:
+    split_folder_path = path to split folder containing txt files with image_ids
+    images_dir = geotif images directory, to associate image_ids to iamge boundaries
+    '''
     train_txt, val_txt, test_txt = f"{split_folder_path}/train.txt", f"{split_folder_path}/val.txt", f"{split_folder_path}/test.txt"
     train_json, val_json, test_json = f"{split_folder_path}/train.json", f"{split_folder_path}/val.json", f"{split_folder_path}/test.json" 
     
     # We write train_images to geojson
     if not os.path.exists(train_json):
-        train_polys = []
-        with open(train_txt) as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter='\n')
-            # Each row of the txt is an image-id
-            for image_id in csv_reader:
-                image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
-                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
-                train_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
-                train_polys.append(train_poly)
-        train_merge = gpd.GeoSeries(cascaded_union(train_polys))
-        train_merge.to_file(train_json, driver="GeoJSON") 
+        _txt_to_geojson(train_txt, train_json, images_dir)
 
     # We write val_images to geojson
     if not os.path.exists(val_json):
-        val_polys = []
-        with open(val_txt) as csv_file:
-            csv_reader = csv.reader(csv_file, delimiter='\n')
-            # Each row of the txt is an image-id
-            for image_id in csv_reader:
-                image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
-                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
-                val_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
-                val_polys.append(val_poly)
-        val_merge = gpd.GeoSeries(cascaded_union(val_polys))
-        val_merge.to_file(val_json, driver="GeoJSON")  
+        _txt_to_geojson(val_txt, val_json, images_dir)
 
     # We write test_images to geojson
     if not os.path.exists(test_json):
-        test_polys = []
-        with open(test_txt) as csv_file:
+        _txt_to_geojson(test_txt, test_json, images_dir)
+
+def _txt_to_geojson(txt_path, geojson_path, images_dir):
+    '''
+    Outputs a geojson per txt file contained in a split folder.
+    Input:
+    txt_path = path to txt file with image_ids
+    geojson_path = output path for the geojson polygon
+    images_dir = geotif images directory, to associate image_ids to iamge boundaries
+    '''
+    if not os.path.exists(geojson_path):
+        polys = []
+        with open(txt_path) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter='\n')
             # Each row of the txt is an image-id
             for image_id in csv_reader:
                 image_path = os.path.join(images_dir, f"{str(image_id[0])}.tif")
-                _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(image_path)
-                test_poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
-                test_polys.append(test_poly)
-        test_merge = gpd.GeoSeries(cascaded_union(test_polys))
-        test_merge.to_file(test_json, driver="GeoJSON") 
+                poly = _get_poly_from_img(image_path)
+                polys.append(poly)
+        train_merge = gpd.GeoSeries(cascaded_union(polys))
+        train_merge.to_file(geojson_path, driver="GeoJSON") 
 
-def get_poly_from_img(img_path):
+def _get_poly_from_img(img_path):
+    '''
+    Get image boundaries as polygon, given the .tif image path
+    '''
     _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(img_path)
     poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
     return poly
