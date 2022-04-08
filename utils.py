@@ -25,12 +25,14 @@ def bbox(points):
 def get_img_bbox(input_path):
     '''
     Obtains geographical information about .tif image
+
     Input:
     input_path = .tif image input path
+
     Output:
     RasterXSize = raster size X direction, 
     RasterYSize = raster size Y direction, 
-    [minx, miny, maxx, maxy] = bouding-box coordinates,
+    [minx, miny, maxx, maxy] = bouding-box projected coordinates,
     [ulx_deg, uly_deg, lrx_deg, lry_deg] = bouding-box coordinates in degrees
     '''
     ### GET PROJECTED COORDINATES
@@ -66,6 +68,13 @@ def get_img_bbox(input_path):
         [np.float128(ulx_deg), np.float128(uly_deg), np.float128(lrx_deg), np.float128(lry_deg)]
 
 def get_array(las_fp):
+    '''
+    Function to obtain an array from .las input file
+    Input:
+    las_fp = path to las input file, str
+    Output:
+    array of 3D points [[x,y,z], [x,y,z], ...]
+    '''
     array = []
     with laspy.open(las_fp) as fh:
         las = fh.read()
@@ -84,7 +93,7 @@ def datasets_to_geojson(split_folder_path, images_dir):
     Outputs a geojson polygon per dataset (train, validation, test).
     Input:
     split_folder_path = path to split folder containing txt files with image_ids
-    images_dir = geotif images directory, to associate image_ids to iamge boundaries
+    images_dir = geotif images directory, to associate image_ids to image boundaries
     '''
     train_txt, val_txt, test_txt = f"{split_folder_path}/train.txt", f"{split_folder_path}/val.txt", f"{split_folder_path}/test.txt"
     train_json, val_json, test_json = f"{split_folder_path}/train.json", f"{split_folder_path}/val.json", f"{split_folder_path}/test.json" 
@@ -128,3 +137,11 @@ def _get_poly_from_img(img_path):
     _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(img_path)
     poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
     return poly
+
+def _las_point_number (las_path):
+    '''
+    Reads a .las file and returns number of points contained
+    '''
+    with laspy.open(las_path) as fh:
+        las = fh.read()
+        return (len(las.points))

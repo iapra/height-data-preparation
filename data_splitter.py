@@ -10,7 +10,7 @@ import math
 from config import DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, DATA_SPLIT_FOLDER, \
     PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST
 
-from utils import get_img_bbox, datasets_to_geojson, get_poly_from_img
+from utils import get_img_bbox, datasets_to_geojson
 
 ### ENTER WHAT YOU NEED
 create_split = False
@@ -140,13 +140,14 @@ def train_val_test_split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN,
 def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST, margin=0.03):
     '''
     Function that splits data input into train-val-test sets, 
-    making sure the 3 datasets do not overlap and respect the percentage asked.
+    making sure the 3 datasets do not overlap and respect the percentage asked (with tolerance margin).
     
-    input: DIR_IMAGES_GEOTIFF = folder directory of geotif images
-    NUMBER_OF_SPLITS = number of split wished
-    PERCENTAGE_TRAIN = percentage of data to set as training data
-    PERCENTAGE_VAL = percentage of data to set as validation data
-    PERCENTAGE_TEST = percentage of data to set as test data
+    input: DIR_IMAGES_GEOTIFF = folder directory of geotif images, str
+    NUMBER_OF_SPLITS = number of split wished, int
+    PERCENTAGE_TRAIN = percentage of data to set as training data, float in [0-1]
+    PERCENTAGE_VAL = percentage of data to set as validation data, float in [0-1]
+    PERCENTAGE_TEST = percentage of data to set as test data, float in [0-1]
+    margin = percentage of tolerance for data_split. Fix to zero to get the exact percentage, float in [0-1].
     
     output: a folder per split, containing 3 txt files (train, validation, test)
     '''
@@ -201,15 +202,14 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
 
     for i in range(NUMBER_OF_SPLITS):
 
-        ### 1 ### CREATE DATA-SPLIT
+        ### 1 ### CREATE DATA-SPLIT, SAVED IN SETS()
 
-        # WE SELECT RANDOMLY TRAINING-PERCENTAGE (60%) OF THE IMAGES
         # WE ENSURE THAT OVERLAPPING IMAGES ARE IN THE SAME DATASET USING A QUEUE STRUCTURE
         train_data = set()
         radius_search = (size_img/2) * math.sqrt(2) # diagonal of the image
-        # First while loop to reach the exact number of training data
+        # First while loop to reach the exact number of training data +/- margin
         while len(train_data) < (train_nb - margin*train_nb) or len(train_data) > (train_nb + margin*train_nb):
-            # RESET ALL VALUES TO TRY AGAIN
+            # RESET ALL VALUES TO TRY AGAIN IF TRAIN_NUMBER NOT WITHIN PERCENTAGE +/- MARGIN WISHED
             img_queue = []
             train_data = set()
             keep_track = set()
@@ -218,6 +218,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
             keep_track.add(first_train_point)
             # Second while loop to obtain training data until there are no more overlaps with other datasets
             while len(train_data) < (train_nb - margin*train_nb) or len(img_queue) > 0:
+                # If there are no image in the queue, we select a random one to add in the queue
                 if len(img_queue) == 0:
                     random_center = random.sample(list(dict_img), 1)[0]
                     while random_center in keep_track:
@@ -228,10 +229,9 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
                     point = img_queue.pop(0)
                     assert point in keep_track
                     train_data.add(point)  
-                    # WE RETRIEVE IMAGE(S) THAT MIGHT OVERLAP
+                    # WE RETRIEVE IMAGE(S) THAT MIGHT OVERLAP USING THE KD-TREE WITH RADIUS SEARCH OF IMAGE DIAGONAL
                     center_x, center_y = dict_img[point]
-                    indices2 = X_tree.query_ball_point(x=[center_x, center_y], \
-                                                                r=radius_search)
+                    indices2 = X_tree.query_ball_point(x=[center_x, center_y], r=radius_search)
                     # image1 = dict_img_inverted[(center_x, center_y)]
                     # img_path1 = f"{DIR_IMAGES_GEOTIFF}/{image1}.tif"
                     # poly1 = get_poly_from_img(img_path1)
@@ -253,7 +253,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
         # We do the same with validation data for the remaining images
         keep_track_bak = keep_track.copy()
         val_data = set()
-        # First while loop to reach the exact number of validation data
+        # First while loop to reach the exact number of validation data +/- margin
         while len(val_data) < (val_nb - margin*val_nb) or len(val_data) > (val_nb + margin*val_nb):
             # RESET ALL VALUES TO TRY AGAIN
             img_queue = []
@@ -267,6 +267,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
             keep_track.add(first_val_point)
             # Second while loop to obtain validation data until there are no more overlaps with other datasets
             while len(val_data) < (val_nb - margin*val_nb) or len(img_queue) > 0:
+                # If there are no image in the queue, we select a random one to add in the queue
                 if len(img_queue) == 0:
                     random_center2 = random.sample(list(dict_img), 1)[0]
                     while random_center2 in keep_track:
@@ -279,8 +280,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
                     val_data.add(point2)  
                     # WE RETRIEVE IMAGE(S) THAT MIGHT OVERLAP
                     center_x, center_y = dict_img[point2]
-                    indices2 = X_tree.query_ball_point(x=[center_x, center_y], \
-                                                                r=radius_search)
+                    indices2 = X_tree.query_ball_point(x=[center_x, center_y], r=radius_search)
                     for index2 in indices2:
                         image_to_queue2 = dict_img_inverted[tuple(centers[index2])]
                         if image_to_queue2 not in keep_track:
