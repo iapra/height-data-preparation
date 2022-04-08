@@ -5,11 +5,18 @@ import numpy as np
 import scipy.spatial
 import random
 import numpy as np
+import math
 
 from config import DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, DATA_SPLIT_FOLDER, \
     PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST
 
-from utils import get_img_bbox
+from utils import get_img_bbox, datasets_to_geojson, get_poly_from_img
+
+### ENTER WHAT YOU NEED
+create_split = False
+visualise_split = True
+DATA_SPLIT_FOLDER_TO_VISUALIZE = DATA_SPLIT_FOLDER + "_3"
+###########################
 
 def train_val_test_split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST):
     '''
@@ -130,7 +137,7 @@ def train_val_test_split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN,
         assert (len(indices) + count_val + count_test) == len(dict_img)
     return
 
-def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST):
+def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST, margin=0.03):
     '''
     Function that splits data input into train-val-test sets, 
     making sure the 3 datasets do not overlap and respect the percentage asked.
@@ -155,7 +162,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
             _, _, _, [ulx_deg, uly_deg, lrx_deg, lry_deg] = get_img_bbox(img_path)
             x = np.float128(ulx_deg + (lrx_deg-ulx_deg))
             y = np.float128(lry_deg + (lry_deg-uly_deg))
-            # We determine the radius search around an image, as the miggest size of the img
+            # We determine the radius search around an image, according to the biggest size of the img
             if size_img == 0:
                 size_img = np.amax([(lrx_deg-ulx_deg), (lry_deg-uly_deg)])
             # Assert that there are no image duplicates (name or content)
@@ -189,7 +196,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
     train_nb = round(len(dict_img) * PERCENTAGE_TRAIN)
     val_nb = round((len(dict_img) - train_nb) * PERCENTAGE_VAL/(PERCENTAGE_VAL+PERCENTAGE_TEST))
     test_nb = (len(dict_img) - (val_nb + train_nb))
-    print(f"There are {len(dict_img)} images. The split has {train_nb} training images, {val_nb} validation images, {test_nb} test images.")
+    print(f"There are {len(dict_img)} images. Split has {train_nb} train. images, {val_nb} val. images, {test_nb} test images, with {(margin*100)} percents precision.")
     assert (train_nb + val_nb + test_nb == len(dict_img))
 
     for i in range(NUMBER_OF_SPLITS):
@@ -199,9 +206,9 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
         # WE SELECT RANDOMLY TRAINING-PERCENTAGE (60%) OF THE IMAGES
         # WE ENSURE THAT OVERLAPPING IMAGES ARE IN THE SAME DATASET USING A QUEUE STRUCTURE
         train_data = set()
-        radius_search = size_img/2
+        radius_search = (size_img/2) * math.sqrt(2) # diagonal of the image
         # First while loop to reach the exact number of training data
-        while len(train_data) != train_nb:
+        while len(train_data) < (train_nb - margin*train_nb) or len(train_data) > (train_nb + margin*train_nb):
             # RESET ALL VALUES TO TRY AGAIN
             img_queue = []
             train_data = set()
@@ -210,7 +217,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
             img_queue.append(first_train_point)
             keep_track.add(first_train_point)
             # Second while loop to obtain training data until there are no more overlaps with other datasets
-            while len(train_data) < train_nb or len(img_queue) > 0:
+            while len(train_data) < (train_nb - margin*train_nb) or len(img_queue) > 0:
                 if len(img_queue) == 0:
                     random_center = random.sample(list(dict_img), 1)[0]
                     while random_center in keep_track:
@@ -225,15 +232,21 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
                     center_x, center_y = dict_img[point]
                     indices2 = X_tree.query_ball_point(x=[center_x, center_y], \
                                                                 r=radius_search)
+                    # image1 = dict_img_inverted[(center_x, center_y)]
+                    # img_path1 = f"{DIR_IMAGES_GEOTIFF}/{image1}.tif"
+                    # poly1 = get_poly_from_img(img_path1)
                     for index in indices2:
                         image_to_queue = dict_img_inverted[tuple(centers[index])]
+                        # img_path2 = f"{DIR_IMAGES_GEOTIFF}/{image_to_queue}.tif"
+                        # poly2 = get_poly_from_img(img_path2)
+                        # if image_to_queue not in keep_track and poly1.intersects(poly2):
                         if image_to_queue not in keep_track:
                             img_queue.append(image_to_queue)
                             keep_track.add(image_to_queue)
                         else:
                             continue
-            # if len(train_data) != train_nb:
-            #     print(f"The random split is run again, because we obtained {len(train_data)} training data samples instead of {train_nb}.")
+            if len(train_data) < int(train_nb - margin*train_nb) or len(train_data) > int(train_nb + margin*train_nb):
+                print(f"The random split is run again, because we obtained {len(train_data)} training data samples instead of {int(train_nb - margin*train_nb)} to {int(train_nb + margin*train_nb)}.")
 
         assert(len(img_queue) == 0 and len(train_data) >= train_nb)
 
@@ -241,19 +254,19 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
         keep_track_bak = keep_track.copy()
         val_data = set()
         # First while loop to reach the exact number of validation data
-        while len(val_data) != val_nb:
+        while len(val_data) < (val_nb - margin*val_nb) or len(val_data) > (val_nb + margin*val_nb):
             # RESET ALL VALUES TO TRY AGAIN
-            val_data = set()
             img_queue = []
+            val_data = set()
             keep_track = keep_track_bak.copy()
-            assert (len(keep_track) == train_nb)
+            assert (len(keep_track) == len(train_data))
             first_val_point = random.sample(list(dict_img), 1)[0]
             while first_val_point in keep_track:
                 first_val_point = random.sample(list(dict_img), 1)[0]
             img_queue.append(first_val_point)
             keep_track.add(first_val_point)
             # Second while loop to obtain validation data until there are no more overlaps with other datasets
-            while len(val_data) < val_nb or len(img_queue) > 0:
+            while len(val_data) < (val_nb - margin*val_nb) or len(img_queue) > 0:
                 if len(img_queue) == 0:
                     random_center2 = random.sample(list(dict_img), 1)[0]
                     while random_center2 in keep_track:
@@ -275,8 +288,8 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
                             keep_track.add(image_to_queue2)
                         else:
                             continue
-            # if len(val_data) != val_nb:
-            #     print(f"The random split is run again, because we obtained {len(val_data)} training data samples instead of {val_nb}.")
+            if len(val_data) < (val_nb - margin*val_nb) or len(val_data) > (val_nb + margin*val_nb):
+                print(f"The random split is run again, because we obtained {len(val_data)} training data samples instead of {int(val_nb - margin*val_nb)} to {int(val_nb + margin*val_nb)}.")
 
         assert(len(keep_track) == (len(train_data) + len(val_data)))
         # THE REMAINING POINTS ARE PUT INTO TEST DATASET
@@ -291,6 +304,7 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
         ### 2 ### WRITE FINAL DATA SPLIT TO TXT FILES
 
         # create folder structure, if not existing
+        print(f"Split {i+1} contains {len(train_data)} train. data, {len(val_data)} val. data, {len(test_data)} test data.")
         FOLDER = DATA_SPLIT_FOLDER + '_' + str(i+1)
         if os.path.isdir(FOLDER):
             shutil.rmtree(FOLDER)
@@ -311,5 +325,9 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
 
     return
 
-split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, \
+if create_split == True:
+    split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, \
     PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST)
+
+if visualise_split == True:
+    datasets_to_geojson(DATA_SPLIT_FOLDER_TO_VISUALIZE, DIR_IMAGES_GEOTIFF)
