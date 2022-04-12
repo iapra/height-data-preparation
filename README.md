@@ -15,32 +15,33 @@ The whole directory can be mounted using -v flag:
 myname/myproject:tag*  
 
 Once the container is run, scripts can be run from the shell:    
-*$ python height-data/script.py*
+*$ python height-data/main.py*
 
 ## Data
 Data is not provided in this repository. Required data include digital orthophotos (DOPs), LiDAR point cloud (LAS format) and LOD model in case of relative height computation. The DOPs can be acquired through WMS request, using the corresponding script. The paths to input data should be updated in the config file.
 
 ## Content
 
-* DOP_grid.py
+* main.py  
+Gathers all the main functions with True/False parameters to update.
+* DOP_grid.py  
 Generates a DOP dataset from WMS request.
 The photos are building centered. Buildings' centres are extracted from Open Street Map.
-* relative_height_main.py
+* relative_height_main.py  
 Computes the difference between a LiDAR point cloud and its corresponding LOD model.
-New LAS files are generated with relative Z values.
+New LAS files are generated with relative Z values.  
 --> Uses functions defined in *relative_height.py*.
-* height_grids_main.py
-Create interpolation grids of the input LAS files, based on the boundary of the DOPs images.
+* height_grids_main.py  
+Create interpolation grids of the input LAS files, based on the boundary of the DOPs images.  
 --> Uses functions defined in *height_grids.py*.
-* data_splitter.py
+* data_splitter.py  
 Outputs folder with 3 txt files: train.txt, val.txt, test.txt containing image ids so that datasets do not overlap.
-* main.py
-* config.py
+* config.py  
 Indicates WMS address, paths and interpolation configurations.
-* utils.py
-* config.py
+* utils.py  
+* config.py  
 --> TO ADD
-* data/
+* data/  
 --> TO ADD
 
 ### Config file

@@ -61,8 +61,9 @@ def shortest_distance(p, equation_coef):
 
 def txt_SQL_cmd(folder_las, file_out, table, classification):
     '''
-    This function create an SQL command to import LAS points to a DB
-    input: folder_las = directory containing one or numerous raw las files
+    This function creates an SQL command to import LAS points to a database
+    Input: 
+    folder_las = directory containing one or numerous raw las files
     file_out = directory for the txt file containing the SQL command
     table = table name in which to enter the points
     classification = LAS classification of interest (e.g. enter 6 for building points)
@@ -151,6 +152,15 @@ def write_new_las(input_las_folder, dict_points, classification):
             print(f"New file written in {las_fp[:-4]}_new.las")
                         
 def get_new_z(file_out_z, POLY_CSV, POINTS_CSV, txt_output_bool):
+    '''
+    Function to calculate relative height between LiDAR points and LOD model
+    Input:
+    file_out_z = path to store new Z values (.txt file)
+    POLY_CSV = csv file containing 3 columns about all and only !!ROOF polygons!! of the LOD model, 
+    polygon-id, GEOMETRY 3D (WKT), GEOMETRY 2D (WKT)
+    POINT_CSV = csv file containing 3 columns about all !!BUILDING points!!,
+    point-id, GEOMETRY 3D (WKT), GEOMETRY 2D (WKT)
+    '''
     dict_poly = {}
     dict_points = {}
     # READ THE ROOF-POLYGONS CSV FILE, CONTAINING POLY_ID, WKT GEOM_2D, WKT GEOM_3D
@@ -178,8 +188,6 @@ def get_new_z(file_out_z, POLY_CSV, POINTS_CSV, txt_output_bool):
         csv_reader = csv.reader(csv_file2, delimiter=',')
         line_count = 0
         for point in csv_reader:
-            # if line_count == 31046:
-            #     return
             if line_count == 0:
                 # print(f'Column names are {", ".join(point)}')
                 line_count += 1
@@ -227,8 +235,7 @@ def get_new_z(file_out_z, POLY_CSV, POINTS_CSV, txt_output_bool):
                 line_count += 1
 
         print(f'Processed {line_count} points.')
-        # if txt_output_bool == False:
-        #     assert line_count == len(dict_points)
+
         return dict_points
 
 def get_new_las(input_las_folder, file_out_z, classification):
