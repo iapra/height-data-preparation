@@ -5,6 +5,7 @@ import os
 import scipy.ndimage
 import scipy.interpolate
 import rasterio as rio
+import math
 
 from config import IDW_power, IDW_radius, IMG_SIZE
 
@@ -52,22 +53,24 @@ def get_crop_pipeline(xmin, xmax, ymin, ymax, las_merged, las_folder_path, geoti
 
 def get_no_interp_pipeline(las_cropped, gtif_out_no_interp, cellSize, origin, size):
     # To get no interpolation, a radius of diagonal of a cellsize is used, and a power of 1
-    command = '[\n\
+    radius = (cellSize/2)*math.sqrt(2)
+    command = '[\
     "' +  las_cropped + '",\n\
     { "type":"writers.gdal",\n\
         "filename":"' + gtif_out_no_interp + '",\n\
-            "output_type":"max",\n\
+            "output_type":"idw",\n\
                 "gdaldriver":"GTiff",\n\
-                    "radius":0.14,\n\
-                        "power":1,\n\
-                            "resolution":' + str(cellSize) + ',\n\
-                                "origin_x":' + str(origin[0]) + ',\n\
-                                    "origin_y":' + str(origin[1]) + ',\n\
-                                        "height":' + str(size) + ',\n\
-                                            "width":' + str(size) + ',\n\
-                            "nodata": -9999\n\
+                    "radius": %s,\n\
+                        "power": %s,\n\
+                            "resolution": %s,\n\
+                                "origin_x": %s,\n\
+                                    "origin_y": %s,\n\
+                                        "height": %s,\n\
+                                            "width": %s,\n\
+                            "nodata": -9999,\n\
+                                "where": "!(Z == -9999)"\
     }\
-    ]'
+    ]' % (radius, 1, cellSize, origin[0], origin[1], size, size)
     return command
 
 def get_idw_pipeline(las_cropped, gtif_out_idw, IDW_power, IDW_radius, cellSize, origin, size):

@@ -12,11 +12,6 @@ from config import DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, DATA_SPLIT_FOLDER, \
 
 from utils import get_img_bbox, datasets_to_geojson
 
-### ENTER WHAT YOU NEED
-create_split = False
-visualise_split = True
-DATA_SPLIT_FOLDER_TO_VISUALIZE = DATA_SPLIT_FOLDER + "_3"
-###########################
 
 def train_val_test_split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST):
     '''
@@ -325,9 +320,10 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
 
     return
 
-if create_split == True:
-    split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, \
-    PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST)
+def data_splitter(create_split, visualise_split, DATA_SPLIT_FOLDER_TO_VISUALIZE):
+    if create_split == True:
+        split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, \
+        PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST)
 
-if visualise_split == True:
-    datasets_to_geojson(DATA_SPLIT_FOLDER_TO_VISUALIZE, DIR_IMAGES_GEOTIFF)
+    if visualise_split == True:
+        datasets_to_geojson(DATA_SPLIT_FOLDER_TO_VISUALIZE, DIR_IMAGES_GEOTIFF)
