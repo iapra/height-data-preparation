@@ -320,10 +320,10 @@ def split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, PERCENTAGE_TRAIN, PERCENTAGE_VAL
 
     return
 
-def data_splitter(create_split, visualise_split, DATA_SPLIT_FOLDER_TO_VISUALIZE):
+def data_splitter(create_split, visualise_split, DATA_SPLIT_FOLDER_TO_VISUALIZE = None):
     if create_split == True:
         split(DIR_IMAGES_GEOTIFF, NUMBER_OF_SPLITS, \
         PERCENTAGE_TRAIN, PERCENTAGE_VAL, PERCENTAGE_TEST)
 
-    if visualise_split == True:
+    if visualise_split == True and DATA_SPLIT_FOLDER_TO_VISUALIZE != None:
         datasets_to_geojson(DATA_SPLIT_FOLDER_TO_VISUALIZE, DIR_IMAGES_GEOTIFF)
