@@ -4,9 +4,13 @@ import laspy
 import numpy as np
 import csv
 import os
+import shutil
+import tifffile as tiff
 from shapely.ops import cascaded_union
 from shapely.geometry import Polygon
 import geopandas as gpd
+
+from config import IMG_SIZE
 
 def bbox(points):
     """ Defines the two oposite corners of the bounding box 
@@ -145,3 +149,46 @@ def _las_point_number (las_path):
     with laspy.open(las_path) as fh:
         las = fh.read()
         return (len(las.points))
+
+def get_png(folder_list, NODATA, dtype):
+    for FOLDER in folder_list:
+        if os.path.exists(f"{FOLDER}_png"):
+            shutil.rmtree(f"{FOLDER}_png")
+            print("Removing existing png conversion.")
+
+        if not os.path.exists(f"{FOLDER}_png"):
+            os.mkdir (f"{FOLDER}_png")
+
+        for infile in os.listdir(f"{FOLDER}"):
+            if infile[-4:] == ".tif":
+                fp = f"{FOLDER}/{infile}"
+                outfile = infile.split('.')[0] + '.png'
+                path_out = f"{FOLDER}_png/{outfile}"
+                ## CONVERT FROM FLOAT64 TO UINT8
+                if os.path.exists(path_out):
+                    continue
+                data = tiff.imread(fp)
+                try:
+                    min_value = min(data[data!=NODATA])
+                except:
+                    min_value = np.nan
+                try:    
+                    max_value = max(data[data!=NODATA]) - min_value
+                except:
+                    max_value = np.nan
+                data = np.nan_to_num(data)
+                try:
+                    data[data==NODATA] = np.nan
+                except:
+                    assert data.all() == 0
+                    data_zeros = np.zeros((IMG_SIZE,IMG_SIZE))
+                    tiff.imwrite(path_out, data_zeros.astype(dtype))
+                    continue
+
+                if min_value!=np.nan and max_value != 0:
+                    data = ((data - min_value)/max_value)*255
+                
+                if min_value!=np.nan and max_value == 0:
+                    data = ((data - min_value))*255
+
+                tiff.imwrite(path_out, data.astype(dtype))
