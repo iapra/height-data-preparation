@@ -5,7 +5,7 @@ from height_grids_main import height_grids_main
 from relative_height_main import relative_height_main
 from data_splitter import data_splitter
 from utils import get_png
-from config import LAS_INPUT_FOLDER, DATA_SPLIT_FOLDER, \
+from config import DIR_IMAGES_GEOTIFF, LAS_INPUT_FOLDER, DATA_SPLIT_FOLDER, \
     DIR_ABS_HEIGHT_GEOTIFF, DIR_REL_HEIGHT_GEOTIFF
 
 # 1 # 
@@ -41,7 +41,7 @@ DATA_SPLIT_FOLDER_TO_VISUALIZE = None
 ######################### CONVERT TIF TO PNG ###########################
 # 5 #
 ### ENTER WHICH FOLDER(S) CONTAINING GEOTIFF IMAGES TO CONVERT & NODATA VALUE
-FOLDER_LIST = []
+FOLDER_LIST = [DIR_IMAGES_GEOTIFF]
 NODATA = -9999
 dtype = np.uint8
 

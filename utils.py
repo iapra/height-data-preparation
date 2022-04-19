@@ -167,7 +167,13 @@ def get_png(folder_list, NODATA, dtype):
                 ## CONVERT FROM FLOAT64 TO UINT8
                 if os.path.exists(path_out):
                     continue
-                data = tiff.imread(fp)
+                ## READ AND KEEP ONLY 3 BANDS FOR RGB
+                try:
+                    data = tiff.imread(fp)[:,:,:3]
+                ## ELSE, ONLY ONE BAND
+                except:
+                    data = tiff.imread(fp)
+                ## RETRIEVE MIN AND MAX VALUES FOR NORMALISING
                 try:
                     min_value = min(data[data!=NODATA])
                 except:
@@ -177,13 +183,14 @@ def get_png(folder_list, NODATA, dtype):
                 except:
                     max_value = np.nan
                 data = np.nan_to_num(data)
-                try:
-                    data[data==NODATA] = np.nan
-                except:
-                    assert data.all() == 0
-                    data_zeros = np.zeros((IMG_SIZE,IMG_SIZE))
-                    tiff.imwrite(path_out, data_zeros.astype(dtype))
-                    continue
+                if len(data[data==NODATA]) != 0:
+                    try:
+                        data[data==NODATA] = np.nan
+                    except:
+                        assert data.all() == 0
+                        data_zeros = np.zeros((IMG_SIZE,IMG_SIZE))
+                        tiff.imwrite(path_out, data_zeros.astype(dtype))
+                        continue
 
                 if min_value!=np.nan and max_value != 0:
                     data = ((data - min_value)/max_value)*255
