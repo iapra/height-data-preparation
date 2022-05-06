@@ -3,3 +3,6 @@ data/
 data_archives/
 .DS_Store
 __pycache__/
+DOP_grid.py
+information_entropy.py
+.*
