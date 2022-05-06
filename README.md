@@ -24,9 +24,6 @@ Data is not provided in this repository. Required data include digital orthophot
 
 * main.py  
 Gathers all the main functions with True/False parameters to update.
-* DOP_grid.py  
-Generates a DOP dataset from WMS request.
-The photos are building centered. Buildings' centres are extracted from Open Street Map.
 * relative_height_main.py  
 Computes the difference between a LiDAR point cloud and its corresponding LOD model.
 New LAS files are generated with relative Z values.  
@@ -53,7 +50,10 @@ DIR_BASE = *str*
 ##### # WMS passwords and address  
 username = *str*  
 password = *str*  
-wms_adress = *str*  
+wms_adress = *str*
+layers= *list of str* 
+styles= *list of str* 
+srs= *str*   
 #### # Interpolations parameters  
 IDW_radius = *int*  
 IDW_power = *int*  
