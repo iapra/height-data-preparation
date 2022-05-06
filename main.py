@@ -4,12 +4,12 @@ import numpy as np
 from height_grids_main import height_grids_main
 from relative_height_main import relative_height_main
 from data_splitter import data_splitter
-from utils import get_png
+from utils import get_png, visualize_empty_height_data
 from config import DIR_IMAGES_GEOTIFF, LAS_INPUT_FOLDER, DATA_SPLIT_FOLDER, \
-    DIR_ABS_HEIGHT_GEOTIFF, DIR_REL_HEIGHT_GEOTIFF
+    DIR_ABS_HEIGHT, DIR_REL_HEIGHT
 
 # 1 # 
-### UPDATE CONFIG FILE
+### UPDATE CONFIG FILE & DATA FOLDER
 
 ######################## RELATIVE HEIGHT ################################
 # 2 #
@@ -41,10 +41,16 @@ DATA_SPLIT_FOLDER_TO_VISUALIZE = None
 ######################### CONVERT TIF TO PNG ###########################
 # 5 #
 ### ENTER WHICH FOLDER(S) CONTAINING GEOTIFF IMAGES TO CONVERT & NODATA VALUE
-FOLDER_LIST = [DIR_IMAGES_GEOTIFF]
+FOLDER_LIST = []                    # leave list empty if no conversion needed
 NODATA = -9999
 dtype = np.uint8
 
+#################### VISUALISE EMPTY HEIGHT DATA GRIDS #################
+# 6 #
+### ENTER WHICH FOLDER(S) CONTAINING PNG IMAGES TO ASSESS
+HEIGHT_FOLDER_PATH = ''             # leave empty if no assessment needed
+GEOJSON_EMPTY_TILES_PATH = ''       # leave empty if no assessment needed
+NODATA_PNG = 0
 ########################################################################
 
 if __name__ == "__main__":
@@ -59,6 +65,9 @@ if __name__ == "__main__":
     data_splitter(create_split, visualise_split, DATA_SPLIT_FOLDER_TO_VISUALIZE)
     
     get_png(FOLDER_LIST, NODATA, dtype)
+
+    if len(HEIGHT_FOLDER_PATH) != 0:
+        visualize_empty_height_data(HEIGHT_FOLDER_PATH, GEOJSON_EMPTY_TILES_PATH, NODATA_PNG)
 
     # end time
     end = time.time()
