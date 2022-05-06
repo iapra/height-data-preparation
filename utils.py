@@ -9,8 +9,10 @@ import tifffile as tiff
 from shapely.ops import cascaded_union
 from shapely.geometry import Polygon
 import geopandas as gpd
+import cv2
+from PIL import Image
 
-from config import IMG_SIZE
+from config import DIR_IMAGES_GEOTIFF, IMG_SIZE
 
 def bbox(points):
     """ Defines the two oposite corners of the bounding box 
@@ -199,3 +201,32 @@ def get_png(folder_list, NODATA, dtype):
                     data = ((data - min_value))*255
 
                 tiff.imwrite(path_out, data.astype(dtype))
+
+def visualize_empty_height_data(folder_path, geojson_path, no_data=0):
+    """
+    Outputs a geojson vector of all height images containing 
+    no height data information, i.e. containing only no_data value
+
+    Input: folder_path = path to the folder containing png images to evaluate, string
+    geojson_path = output path for the geojson vector file
+    no_data = value of no_data in the png images, int
+    """
+    empty_imgs = []
+    height_imgs = os.listdir(folder_path)
+    for img in height_imgs:
+        if img[-4:] == ".png":
+            height_path = os.path.join(folder_path, img)
+            img_content = np.array(Image.open(height_path))
+            if len(img_content[img_content != no_data]) == 0:
+                image_path = f"{DIR_IMAGES_GEOTIFF}/{img[:-4]}.tif"
+                poly = _get_poly_from_img(image_path)
+                empty_imgs.append(poly)
+            else:
+                # The height image is not empty
+                continue
+        else:
+            # This is not an image
+            continue
+    print(len(empty_imgs))
+    empty_height_merged = gpd.GeoSeries(cascaded_union(empty_imgs))
+    empty_height_merged.to_file(geojson_path, driver="GeoJSON") 
