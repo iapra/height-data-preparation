@@ -11,12 +11,66 @@ from shapely.geometry import Polygon
 import geopandas as gpd
 import cv2
 from PIL import Image
+from owslib.wms import WebMapService
+from owslib.util import Authentication
 
-from config import DIR_IMAGES_GEOTIFF, IMG_SIZE
+from config import DIR_IMAGES_GEOTIFF, IMG_SIZE, \
+    username, password, wms_address, layers, styles, srs
+
+def get_aerial_img(pointlist_lon_lat, img_width, img_height, filepath):
+    '''
+    Sets up a wms connection and saves aerial images from 
+    a list of shapely points
+    
+    Input: 
+    username = str
+    password = str
+    wms_address = url address for wms request, str
+    pointlist_lon_lat = list of shapely.geometry.Point with [LON, LAT] (centers of images)
+    img_size = total number of pixels (max. 4000x4000)
+    filepath = output path for downloaded image, string    
+    '''
+    # set up authentication
+    authenticate = Authentication()
+    
+    #connect to service
+    wms = WebMapService(wms_address,
+                        version='1.1.1',
+                        xml=None, 
+                        username=username,
+                        password=password, 
+                        parse_remote_metadata=False, 
+                        timeout=30,
+                        headers=None, 
+                        auth=authenticate)
+    
+    # define bounding box using the min and max values of x and y    
+    gs = gpd.GeoSeries(pointlist_lon_lat)
+    # bottom left
+    blc = list([gs.bounds.minx.min(),gs.bounds.miny.min()]) 
+    # top right
+    trc = list([gs.bounds.maxx.max(),gs.bounds.maxy.max()]) 
+    
+    # get the tile and save as image    
+    tile = wms.getmap(layers=layers,
+                styles=styles,
+                srs=srs,
+                bbox = (blc[0],blc[1],trc[0],trc[1]),
+                size=(img_width, img_height),
+                format='image/png',
+                transparent=True)   
+    
+    out = open(filepath, 'wb')
+    out.write(tile.read())
+    out.close()
+
+    return
 
 def bbox(points):
     """ Defines the two oposite corners of the bounding box 
-    Input : points (array form)
+
+    Input : 
+    points = array [[x,y],...]
     Returns two points (corners of the bbox)
     """
     lx = min(point[0] for point in points)
@@ -38,7 +92,7 @@ def get_img_bbox(input_path):
     Output:
     RasterXSize = raster size X direction, 
     RasterYSize = raster size Y direction, 
-    [minx, miny, maxx, maxy] = bouding-box projected coordinates,
+    [minx, miny, maxx, maxy] = bounding-box projected coordinates,
     [ulx_deg, uly_deg, lrx_deg, lry_deg] = bouding-box coordinates in degrees
     '''
     ### GET PROJECTED COORDINATES
@@ -75,9 +129,11 @@ def get_img_bbox(input_path):
 
 def get_array(las_fp):
     '''
-    Function to obtain an array from .las input file
+    Obtains an array from .las input file
+
     Input:
     las_fp = path to las input file, str
+
     Output:
     array of 3D points [[x,y,z], [x,y,z], ...]
     '''
@@ -97,9 +153,10 @@ def get_array(las_fp):
 def datasets_to_geojson(split_folder_path, images_dir):
     '''
     Outputs a geojson polygon per dataset (train, validation, test).
+
     Input:
-    split_folder_path = path to split folder containing txt files with image_ids
-    images_dir = geotif images directory, to associate image_ids to image boundaries
+    split_folder_path = path to split folder containing txt files with image_ids, str
+    images_dir = geotif images directory, to associate image_ids to image boundaries, str
     '''
     train_txt, val_txt, test_txt = f"{split_folder_path}/train.txt", f"{split_folder_path}/val.txt", f"{split_folder_path}/test.txt"
     train_json, val_json, test_json = f"{split_folder_path}/train.json", f"{split_folder_path}/val.json", f"{split_folder_path}/test.json" 
@@ -119,10 +176,11 @@ def datasets_to_geojson(split_folder_path, images_dir):
 def _txt_to_geojson(txt_path, geojson_path, images_dir):
     '''
     Outputs a geojson per txt file contained in a split folder.
+
     Input:
-    txt_path = path to txt file with image_ids
-    geojson_path = output path for the geojson polygon
-    images_dir = geotif images directory, to associate image_ids to iamge boundaries
+    txt_path = path to txt file with image_ids, str
+    geojson_path = output path for the geojson polygon, str
+    images_dir = geotif images directory, to associate image_ids to image boundaries, str
     '''
     if not os.path.exists(geojson_path):
         polys = []
@@ -138,7 +196,10 @@ def _txt_to_geojson(txt_path, geojson_path, images_dir):
 
 def _get_poly_from_img(img_path):
     '''
-    Get image boundaries as polygon, given the .tif image path
+    Get image boundaries as shapely polygon, given the .tif image path
+
+    Input:
+    img_path = str
     '''
     _, _, [minx, miny, maxx, maxy], _ = get_img_bbox(img_path)
     poly = Polygon([[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy]])
@@ -147,12 +208,24 @@ def _get_poly_from_img(img_path):
 def _las_point_number (las_path):
     '''
     Reads a .las file and returns number of points contained
+
+    Input:
+    las_path = str
     '''
     with laspy.open(las_path) as fh:
         las = fh.read()
         return (len(las.points))
 
 def get_png(folder_list, NODATA, dtype):
+    '''
+    Gets .png from .tif images with required datatype (dtype) 
+    for images contained in the input folder(s)
+
+    Input:
+    folder_list = folders to convert, list of str
+    NODATA = no data in the input images, int
+    dtype = data type for the resulting .png images
+    '''
     for FOLDER in folder_list:
         if os.path.exists(f"{FOLDER}_png"):
             shutil.rmtree(f"{FOLDER}_png")
@@ -203,14 +276,15 @@ def get_png(folder_list, NODATA, dtype):
                 tiff.imwrite(path_out, data.astype(dtype))
 
 def visualize_empty_height_data(folder_path, geojson_path, no_data=0):
-    """
+    '''
     Outputs a geojson vector of all height images containing 
     no height data information, i.e. containing only no_data value
 
-    Input: folder_path = path to the folder containing png images to evaluate, string
+    Input: 
+    folder_path = path to the folder containing png images to evaluate, string
     geojson_path = output path for the geojson vector file
     no_data = value of no_data in the png images, int
-    """
+    '''
     empty_imgs = []
     height_imgs = os.listdir(folder_path)
     for img in height_imgs:
