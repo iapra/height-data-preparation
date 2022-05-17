@@ -26,7 +26,7 @@ las_merged = f"{LAS_INPUT_FOLDER}/merged.las"
 ### ENTER WHAT INTERPOLATION YOU WANT WITH TRUE/FALSE
 no_interp = False
 idw = False
-nn = True
+nn = False
 
 ######################### DATA-SPLIT ###################################
 # 4 #
