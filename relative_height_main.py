@@ -1,40 +1,32 @@
 import os
-import time
+import geopandas as gpd
+import pickle as pkl
 
-from config import LAS_INPUT_FOLDER, \
-    POINTS_CSV, POLY_CSV, FILE_OUT_Z, FILE_OUT_SQL, TABLE
+from config import LAS_INPUT_FOLDER, POLY_CSV
 
-from relative_height import txt_SQL_cmd, get_new_z, \
-    get_new_las, write_new_las
+from relative_height import get_point_gdf, get_poly_gdf, get_new_las_files
 
-
-def relative_height_main(get_sql_cmd, get_intermediate_new_z, get_new_las_from_txt, \
-    classification, get_new_las_directly = False):
-
-    if get_sql_cmd == True:
-        txt_SQL_cmd(LAS_INPUT_FOLDER, FILE_OUT_SQL, TABLE, classification)
-
-    if get_intermediate_new_z == True:
-        try:
-            assert os.path.exists(POLY_CSV)
-            assert os.path.exists(POINTS_CSV)
-        except AssertionError:
-            print("The csv fils containing roof polygons and points either does not exist, or not at the correct path.")
-        if os.path.exists(FILE_OUT_Z):
-            print(f'{FILE_OUT_Z} already exists.')
-            return
-            # print(f'Deleted {FILE_OUT_Z}. Writing a new one, same directory.')
-            # os.remove(FILE_OUT_Z)
-        get_new_z(FILE_OUT_Z, POLY_CSV, POINTS_CSV, txt_output_bool=True)
-
-    if get_new_las_from_txt == True:
-        try:
-            assert os.path.exists(FILE_OUT_Z)
-        except AssertionError:
-            print("New z values first need to be computed. \
-            If they have already been, checkout your output file and path.")
-        get_new_las(LAS_INPUT_FOLDER, FILE_OUT_Z, classification)
-
-    if get_new_las_directly == True:
-        dict_points = get_new_z(FILE_OUT_Z, POLY_CSV, POINTS_CSV, txt_output_bool=False)
-        write_new_las(LAS_INPUT_FOLDER, dict_points, classification)
+def relative_height_main(distance_type, classification, get_new_las):
+    '''
+    Central function to obtain LAS file(s) with relative height
+    between LiDAR  point cloud and LOD roof polygons
+    Input:
+    distance_type = 'vertical' or 'min', str
+    classification = las classification of interest, int
+    get_new_las = bool
+    '''
+    if get_new_las == True:
+        # WE STORE THE GDF IN PKL FOR FASTER RE-LOAD IF NECESSARY
+        pkl_file = f"{LAS_INPUT_FOLDER}/gdf_polys_to_points.pkl"
+        if os.path.exists(pkl_file):
+            with open(pkl_file, 'rb') as f:
+                [gdf_polys_to_points] = pkl.load(f)
+        elif not os.path.exists(pkl_file):
+            # WE STORE POINTS AND ROOF POLYGONS IN GEODATAFRAMEs
+            gdf_lidar_points = get_point_gdf(LAS_INPUT_FOLDER)
+            gdf_polygons = get_poly_gdf(POLY_CSV)
+            # WE COUPLE EACH POINT TO A POLYGON
+            gdf_polys_to_points = gpd.tools.sjoin(gdf_polygons, gdf_lidar_points, how='inner',rsuffix='point',lsuffix='polygon')
+            with open(pkl_file, 'wb') as f:
+                pkl.dump([gdf_polys_to_points], f)
+        get_new_las_files(distance_type, LAS_INPUT_FOLDER, gdf_polys_to_points, classification)

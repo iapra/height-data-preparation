@@ -8,7 +8,28 @@ from shapely.geometry import Point, Polygon
 import math
 import numpy as np
 import pandas as pd
+import geopandas as gpd
 
+def get_point_gdf(las_path):
+    las_files = [os.path.join(las_path,l) for l in os.listdir(las_path) if l.endswith('.las')]
+    lidar_points = []
+    print('Reading .las files...')
+    for las_file in las_files:
+        with laspy.open(las_file) as f:
+            las = f.read()
+            building_points = las.points[las.classification == 6] # filter for building_pionts
+            lidar_points.extend([Point(xyz) for xyz in zip(building_points.x,building_points.y,building_points.z)]) # append points
+    print('Converting to GeoDataFrame...')
+    df=pd.DataFrame(lidar_points,columns=['geometry'])
+    gdf_lidar_points=gpd.GeoDataFrame(df,crs='epsg:25832',geometry='geometry')
+    gdf_lidar_points['point']=gdf_lidar_points['geometry'] # duplicate geometry column to retain it in sjoin operation (sjoin drops active geometry column in right table)
+    return gdf_lidar_points
+
+def get_poly_gdf(POLY_CSV):
+    df = pd.read_csv(POLY_CSV,sep=',')
+    df['geom_3d'] = df['geom_3d'].apply(shapely.wkt.loads)
+    gdf_polygons = gpd.GeoDataFrame(df,crs='epsg:25832',geometry='geom_3d')
+    return gdf_polygons
 
 def plane_equation_fit (points):
     '''
@@ -30,7 +51,7 @@ def plane_equation_fit (points):
 
 def isAbove_plane(point, equation_coef):
     '''
-    Function to find distance from point p to plane
+    Outputs if a point is above (True) or under a plane (False)
     Input: 
     point = point coordinates in array form [x,y,z]
     equation_coef = coefficients of the plane equation, in the form [a,b,c,d]
@@ -47,7 +68,7 @@ def isAbove_plane(point, equation_coef):
 
 def shortest_distance(p, equation_coef):
     '''
-    Function to find distance from point p to plane
+    Computes shortest/minimum distance from point p to plane
     Input: 
     p = point coordinates in array form [x,y,z]
     equation_coef = coefficients of the plane equation, in the form [a,b,c,d]
@@ -57,54 +78,36 @@ def shortest_distance(p, equation_coef):
     numerator = abs((a * x + b * y + c * z + d))
     denum = (math.sqrt(a * a + b * b + c * c))
     #print(numerator/denum)
-    return numerator/denum
+    isAbove_result = isAbove_plane(p, equation_coef)
+    if isAbove_result == True:
+        return numerator/denum
+    if isAbove_result == False:
+        return -(numerator/denum)
 
-def txt_SQL_cmd(folder_las, file_out, table, classification):
+def vertical_distance(point, equation_coef):
     '''
-    This function creates an SQL command to import LAS points to a database
-    Input: 
-    folder_las = directory containing one or numerous raw las files
-    file_out = directory for the txt file containing the SQL command
-    table = table name in which to enter the points
-    classification = LAS classification of interest (e.g. enter 6 for building points)
+    Computes vertical distance between a point and a plane given its equation
+    Input:
+    point = point coordinates in array form [x,y,z]
+    equation_coef = coefficients of the plane equation, in the form [a,b,c,d]
     '''
-    files = os.listdir(folder_las)
-    array_txt = []
-    id = 0
-    for f in files:
-        if f[-4:] == ".las":
-            las_fp = folder_las + "/" + f
-            print(f"Adding points from {f}, starting with id {id}")
-            with laspy.open(las_fp) as fh:
-                las = fh.read()
-                scales, offsets = las.header.scales, las.header.offsets
-                for p in range(len(las.points)):
-                    if (las.points[p].classification == classification):   # Ground == 2; Buildings == 6
-                        x = (float(las.points[p].X * scales[0]) + offsets[0])
-                        y = (float(las.points[p].Y * scales[1]) + offsets[1])
-                        z = (float(las.points[p].Z * scales[2]) + offsets[2])
-                        value_strg = f"({id}, ST_GeomFromEWKT('SRID=25832;POINT({x} {y} {z})'))"
-                        array_txt.append(value_strg)
-                        id += 1
-    print(len(array_txt))
-    with open(file_out, 'w') as f:
-        f.write(f"INSERT INTO {table} (point_id, geom) \nVALUES ")
-        for values in array_txt[:-1]:
-            f.write(f"{values},\n")
-        f.write(f"{array_txt[-1]}")
-        f.close()
+    z = point[2]
+    a, b, c, d = equation_coef[0], equation_coef[1], equation_coef[2], -equation_coef[3]
+    x,y,z = point[0], point[1], point[2]
+    # VERTICAL DISTANCE IS THE DIFFERENCE BEWTEEN Z AND EXPECTED-Z
+    expected_z = -(a*x + b*y +d) /c
+    vertical_distance = z - expected_z
+    return vertical_distance
 
 def write_new_las(input_las_folder, dict_points, classification):
     '''
-    This function write one or numerous new LAS files based on LAS file inputs, 
+    Writes one or numerous new LAS files based on LAS file inputs, 
     changing only their Z values according to the dictionary given as input.
-    input: folder_las = directory containing one or numerous raw las files
+    Input: 
+    folder_las = directory containing one or numerous raw las files
     dict_points =   keys are the point id (corresponding to the order in which the points were read from the LAS file), 
                     values are the new Z values
     classification = LAS classification of interest (e.g. enter 6 for building points)
-
-    NB --- folder_las and classification have to be similar to the ones used for the txt_SQL_cmd
-    so that the point ids are correct
     '''
     files = os.listdir(input_las_folder)
     id = 0
@@ -150,103 +153,48 @@ def write_new_las(input_las_folder, dict_points, classification):
             with laspy.open(f'{las_fp[:-4]}_new.las', mode="w", header=header_new) as writer:
                 writer.write_points(pointrecord)
             print(f"New file written in {las_fp[:-4]}_new.las")
-                        
-def get_new_z(file_out_z, POLY_CSV, POINTS_CSV, txt_output_bool):
+
+def get_new_las_files(distance_type, input_las_folder, gdf_polys_to_points, classification):
     '''
-    Function to calculate relative height between LiDAR points and LOD model
+    Obtains new las files giving relative height between LiDAR points and LOD model roof polygons
     Input:
-    file_out_z = path to store new Z values (.txt file)
-    POLY_CSV = csv file containing 3 columns about all and only !!ROOF polygons!! of the LOD model, 
-    polygon-id, GEOMETRY 3D (WKT), GEOMETRY 2D (WKT)
-    POINT_CSV = csv file containing 3 columns about all !!BUILDING points!!,
-    point-id, GEOMETRY 3D (WKT), GEOMETRY 2D (WKT)
+    distance_type = 'vertical' or 'min', str
+    input_las_folder = path to folder containing las file(s) input, str
+    gdf_polys_to_points = geodataframe containing points and their underlying roof polygons,
+    gdf
+    classification = las classification of interest, int
     '''
     dict_poly = {}
     dict_points = {}
-    # READ THE ROOF-POLYGONS CSV FILE, CONTAINING POLY_ID, WKT GEOM_2D, WKT GEOM_3D
-    with open(POLY_CSV) as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-        for row in csv_reader:
-            if line_count == 0:
-                # print(f'Column names are {", ".join(row)}')
-                line_count += 1
-                continue
-            else:
-                poly_id, geom_3d, geom_2d = row
-                poly_2d = shapely.wkt.loads(geom_2d)
-                poly_3d = shapely.wkt.loads(geom_3d)
-                # WE COMPUTE THE PLANE EQUATION FITTING BEST THE POLYGON POINTS
-                points = np.array(poly_3d.exterior.coords)
-                coef_equation = plane_equation_fit(points)
-                # WE STORE EVERYTHING IN A DICT
-                dict_poly[poly_id] = (poly_2d, poly_3d, coef_equation)
-                line_count += 1
-        print(f'Processed {line_count} polygons.')
-        
-    with open(POINTS_CSV) as csv_file2:
-        csv_reader = csv.reader(csv_file2, delimiter=',')
-        line_count = 0
-        for point in csv_reader:
-            if line_count == 0:
-                # print(f'Column names are {", ".join(point)}')
-                line_count += 1
-                continue
-            else:
-                if line_count%100000 == 0:
-                    print(f"{line_count} points done...")
-                point_id, point_geom_3d, point_geom_2d = point
-                point_2d = shapely.wkt.loads(point_geom_2d)
-                point_3d = shapely.wkt.loads(point_geom_3d)
-                # RETRIEVE UNDERLYING POLYGON
-                min_dist = -9999
-                for poly_id in dict_poly:
-                    poly_2d, poly_3d, coef_equation = dict_poly[poly_id]
-                    if poly_2d.contains(point_2d):
-                        # COMPUTE DISTANCE TO PLANE
-                        min_dist = point_3d.distance(poly_3d)
-                        p = list(point_3d.coords)
-                        point = [p[0][0], p[0][1], p[0][2]]
-                        min_dist = shortest_distance(point, coef_equation)
-                        # THE DISTANCE IS NEGATIVE IF THE POINT IS UNDER THE PLANE
-                        isAbove_result = isAbove_plane(point, coef_equation)
-                        if isAbove_result == True:
-                            if txt_output_bool == True:
-                                with open(file_out_z, 'a') as f:
-                                    f.write(f"{point_id}, {min_dist}\n")
-                            else:
-                                dict_points[point_id] = min_dist
-                        if isAbove_result == False:
-                            if txt_output_bool == True:
-                                with open(file_out_z, 'a') as f:
-                                    f.write(f"{point_id}, {-min_dist}\n")
-                            else:
-                                dict_points[point_id] = -min_dist
-                        break
-                    else:
-                        continue
-                # THE DISTANCE IS SET TO -9999 (NODATA) IF THERE IS NO PLANE UNDER THE POINT
-                if min_dist == -9999:
-                    if txt_output_bool == True:
-                        with open(file_out_z, 'a') as f:
-                            f.write(f"{point_id}, {min_dist}\n")
-                    else:
-                        dict_points[point_id] = min_dist
-                line_count += 1
+    # NEW Z COMPUTATION
+    print('Computing relative distances...')
+    for _, row in gdf_polys_to_points.iterrows():
+        dist = -9999
+        # RETRIEVE INFO IN GDF
+        point_3d = shapely.wkt.loads(str(row['point']))
+        poly_id = int(row['poly_id'])
+        point_id = int(row['index_point'])
+        # DISTANCE TO ROOF PLANE
+        p = list(point_3d.coords)
+        point = [p[0][0], p[0][1], p[0][2]]
+        # WE STORE PLANE-EQUATIONS IN A DICT SO IT IS COMPUTED ONLY ONCE PER POLYGON
+        if poly_id in dict_poly:
+            coef_equation = dict_poly[poly_id]
+        # WE COMPUTE PLANE EQUATION IF IT HAD NOT BEEN DONE YET
+        else:
+            poly_3d = shapely.wkt.loads(str(row['geom_3d']))
+            points = np.array(poly_3d.exterior.coords)
+            coef_equation = plane_equation_fit(points)
+            dict_poly[poly_id] = coef_equation
+        # MINIMUM OR VERTICAL DISTANCE
+        if distance_type == 'min':
+            dist = shortest_distance(point, coef_equation)
+        if distance_type == 'vertical':
+            dist = vertical_distance(point, coef_equation)
 
-        print(f'Processed {line_count} points.')
-
-        return dict_points
-
-def get_new_las(input_las_folder, file_out_z, classification):
-    # READ NEW Z VALUES FROM TXT AND CREATE DICT
-    dict_points = {}
-    with open(file_out_z) as f:
-        for line in f:
-            content = line.strip().split(', ')
-            id, z = int(content[0]), float(content[1])
-            dict_points[id] = z
-    print("Dict read ! Writing las file(s)...")
-
+        dict_points[point_id] = dist
+    
     # WRITE NEW .LAS WITH NEW Z VALUES
     write_new_las(input_las_folder, dict_points, classification)
+
+    return

@@ -50,26 +50,20 @@ DIR_BASE = *str*
 ##### # WMS passwords and address  
 username = *str*  
 password = *str*  
-wms_adress = *str*
-layers= *list of str* 
-styles= *list of str* 
+wms_adress = *str*  
+layers= *list of str*  
+styles= *list of str*  
 srs= *str*   
 #### # Interpolations parameters  
 IDW_radius = *int*  
 IDW_power = *int*  
 IMG_SIZE = *int*      # square image  
-#### # SQL COMMANDS TO IMPORT LAS POINT DATA TO DATABASE  
-FILE_OUT_SQL = *str*  
-TABLE = *str*  
-#### # CSV OUTPUT/INPUT for normalised/relative height data  
-POINTS_CSV = *str*  
+#### # CSV POLYGON DIRECTORY for normalised/relative height data  
 POLY_CSV = *str*  
-#### # RELATIVE Z OUTPUT TXT-FILE  
-FILE_OUT_Z = *str*  
 #### # PATHS FOR .TIF, .LAS AND INTERPOLATION  
 INTERPOLATION_FOLDER = *str*  
-DIR_REL_HEIGHT_GEOTIFF = INTERPOLATION_FOLDER + *str* 
-DIR_ABS_HEIGHT_GEOTIFF = INTERPOLATION_FOLDER + *str* 
+DIR_REL_HEIGHT_GEOTIFF = INTERPOLATION_FOLDER + *str*  
+DIR_ABS_HEIGHT_GEOTIFF = INTERPOLATION_FOLDER + *str*  
 LAS_INPUT_FOLDER = *str*  
 DIR_IMAGES_GEOTIFF = *str*  
 #### # TRAIN, VAL, TEST SPLITS  

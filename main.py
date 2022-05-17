@@ -15,11 +15,9 @@ from config import DIR_IMAGES_GEOTIFF, LAS_INPUT_FOLDER, DATA_SPLIT_FOLDER, \
 # 2 #
 ### INDICATE THE LAS CLASSIFICATION YOU WANT
 classification = 6
-### INDICATE WHAT YOU NEED WITH TRUE/FALSE
-get_sql_cmd = False
-get_intermediate_new_z = False
-get_new_las_from_txt = False
-get_new_las_directly = False
+### TO GET NEW LAS FILE WITH RELATIVE HEIGHT, INDICATE TRUE AND THE DISTANCE TYPE
+distance_type = str('vertical')    # 'vertical or 'min'
+get_new_las = False
 
 ######################### INTERPOLATION #################################
 # 3 #
@@ -28,7 +26,7 @@ las_merged = f"{LAS_INPUT_FOLDER}/merged.las"
 ### ENTER WHAT INTERPOLATION YOU WANT WITH TRUE/FALSE
 no_interp = False
 idw = False
-nn = False
+nn = True
 
 ######################### DATA-SPLIT ###################################
 # 4 #
@@ -57,8 +55,7 @@ if __name__ == "__main__":
     # starting time
     start = time.time()
 
-    relative_height_main(get_sql_cmd, get_intermediate_new_z, \
-        get_new_las_from_txt, classification, get_new_las_directly)
+    relative_height_main(distance_type, classification, get_new_las)
 
     height_grids_main(no_interp, idw, nn, las_merged)
 
